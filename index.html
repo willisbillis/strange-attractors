@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strange Attractors | Interactive 3D Chaos Explorer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0a0f;
+    color: #e0e0f0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #canvas-container {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  canvas { display: block; }
+
+  /* ── Side Panel ── */
+  #panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: 300px;
+    height: 100vh;
+    background: rgba(26,26,46,0.92);
+    backdrop-filter: blur(8px);
+    border-left: 1px solid rgba(233,69,96,0.3);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.35s cubic-bezier(.4,0,.2,1);
+    overflow: hidden;
+  }
+
+  #panel.collapsed { transform: translateX(272px); }
+
+  #panel-toggle {
+    position: absolute;
+    left: -36px; top: 50%;
+    transform: translateY(-50%);
+    width: 36px; height: 72px;
+    background: rgba(26,26,46,0.92);
+    border: 1px solid rgba(233,69,96,0.3);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #e94560;
+    font-size: 18px;
+    writing-mode: vertical-rl;
+    user-select: none;
+    transition: background 0.2s;
+  }
+  #panel-toggle:hover { background: rgba(233,69,96,0.2); }
+
+  #panel-header {
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid rgba(233,69,96,0.2);
+    flex-shrink: 0;
+  }
+
+  #panel-header h1 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #e94560;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  #panel-header p { font-size: 11px; color: #7070a0; margin-top: 2px; }
+
+  #panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #e94560 #1a1a2e;
+  }
+  #panel-body::-webkit-scrollbar { width: 4px; }
+  #panel-body::-webkit-scrollbar-track { background: #1a1a2e; }
+  #panel-body::-webkit-scrollbar-thumb { background: #e94560; border-radius: 2px; }
+
+  .section {
+    margin-bottom: 16px;
+    background: rgba(22,33,62,0.7);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .section-header {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #a0a0c0;
+    background: rgba(233,69,96,0.08);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  .section-header:hover { background: rgba(233,69,96,0.14); }
+  .section-header .arrow { font-size: 10px; transition: transform 0.2s; }
+  .section-body { padding: 10px 12px; }
+  .section.closed .section-body { display: none; }
+  .section.closed .arrow { transform: rotate(-90deg); }
+
+  label {
+    display: block;
+    font-size: 11px;
+    color: #9090b0;
+    margin-bottom: 3px;
+    margin-top: 8px;
+  }
+  label:first-child { margin-top: 0; }
+
+  select, input[type=range] { width: 100%; }
+
+  select {
+    background: #0f0f1f;
+    border: 1px solid rgba(233,69,96,0.3);
+    color: #e0e0f0;
+    padding: 6px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+  }
+  select:focus { border-color: #e94560; }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    height: 4px;
+    background: #2a2a4e;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    background: #e94560;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    background: #e94560;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .slider-row input[type=range] { flex: 1; margin: 0; }
+  .slider-val {
+    font-size: 11px;
+    color: #e94560;
+    min-width: 38px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(233,69,96,0.4);
+    background: rgba(233,69,96,0.1);
+    color: #e94560;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    user-select: none;
+  }
+  .btn:hover { background: rgba(233,69,96,0.25); border-color: #e94560; }
+  .btn.active { background: rgba(233,69,96,0.3); border-color: #e94560; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .btn-full { width: 100%; margin-top: 6px; }
+
+  /* ── Info Panel ── */
+  #info-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 300px;
+    background: rgba(26,26,46,0.88);
+    backdrop-filter: blur(6px);
+    border-top: 1px solid rgba(233,69,96,0.25);
+    z-index: 10;
+    transition: transform 0.3s cubic-bezier(.4,0,.2,1), right 0.35s cubic-bezier(.4,0,.2,1);
+  }
+  #info-panel.collapsed { transform: translateY(calc(100% - 36px)); }
+  #panel.collapsed ~ #info-panel { right: 28px; }
+
+  #info-toggle {
+    padding: 8px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #e94560;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+  }
+  #info-toggle:hover { background: rgba(233,69,96,0.08); }
+  #info-toggle .arrow { font-size: 10px; transition: transform 0.2s; }
+  #info-panel.collapsed #info-toggle .arrow { transform: rotate(180deg); }
+  #info-toggle-name { font-size: 13px; color: #e0e0f0; font-weight: 600; }
+
+  #info-body {
+    padding: 12px 20px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  #info-body h3 { font-size: 12px; color: #e94560; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+  #info-body p { font-size: 12px; color: #a0a0c0; line-height: 1.5; }
+  #info-equations p { font-family: 'Courier New', monospace; font-size: 11px; color: #c0d0ff; line-height: 1.7; }
+
+  /* ── HUD ── */
+  #hud {
+    position: fixed;
+    top: 16px; left: 16px;
+    z-index: 10;
+    pointer-events: none;
+  }
+  #hud-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #e0e0f0;
+    text-shadow: 0 0 20px rgba(233,69,96,0.6);
+    letter-spacing: 2px;
+    line-height: 1.2;
+  }
+  #hud-subtitle {
+    font-size: 11px;
+    color: #6060a0;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  #hud-points {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #505080;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #gallery-indicator {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(233,69,96,0.2);
+    border: 1px solid rgba(233,69,96,0.5);
+    color: #e94560;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    z-index: 10;
+    display: none;
+    pointer-events: none;
+  }
+
+  #reset-camera-btn {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 10;
+  }
+
+
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div id="hud">
+  <div id="hud-title">LORENZ</div>
+  <div id="hud-subtitle">Strange Attractor</div>
+  <div id="hud-points">Points: 0</div>
+</div>
+
+<div id="gallery-indicator">⬤ GALLERY MODE</div>
+
+<!-- Side Panel -->
+<div id="panel">
+  <div id="panel-toggle" onclick="togglePanel()" title="Toggle Panel">⟩</div>
+
+  <div id="panel-header">
+    <h1>Strange Attractors</h1>
+    <p>Interactive 3D Chaos Explorer</p>
+  </div>
+
+  <div id="panel-body">
+
+    <!-- Attractor -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        Attractor <span class="arrow">▾</span>
+      </div>
+      <div class="section-body">
+        <label>Select Attractor</label>
+        <select id="attractor-select" onchange="selectAttractor(this.value)">
+        </select>
+      </div>
+    </div>
+
+    <!-- Animation -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        Animation <span class="arrow">▾</span>
+      </div>
+      <div class="section-body">
+        <div class="btn-row">
+          <button class="btn" id="play-btn" onclick="togglePlay()">⏸ Pause</button>
+          <button class="btn" onclick="resetSimulation()">↺ Reset</button>
+        </div>
+        <label>Speed: <span id="speed-val">1.0×</span></label>
+        <input type="range" id="speed-slider" min="0.1" max="10" step="0.1" value="1"
+          oninput="updateSpeed(this.value)">
+      </div>
+    </div>
+
+    <!-- Visual -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        Visual <span class="arrow">▾</span>
+      </div>
+      <div class="section-body">
+        <label>Color Scheme</label>
+        <select id="color-scheme" onchange="updateColorScheme(this.value)">
+          <option value="time">Time (Rainbow)</option>
+          <option value="velocity">Velocity</option>
+          <option value="depth">Depth (Z-axis)</option>
+          <option value="solid">Solid</option>
+        </select>
+
+        <label>Trail Length</label>
+        <div class="slider-row">
+          <input type="range" id="trail-length" min="100" max="50000" step="100" value="20000"
+            oninput="updateTrailLength(this.value)">
+          <span class="slider-val" id="trail-val">20000</span>
+        </div>
+
+        <label>Opacity</label>
+        <div class="slider-row">
+          <input type="range" id="opacity-slider" min="0.1" max="1.0" step="0.05" value="0.85"
+            oninput="updateOpacity(this.value)">
+          <span class="slider-val" id="opacity-val">0.85</span>
+        </div>
+
+        <label>Line Width</label>
+        <div class="slider-row">
+          <input type="range" id="linewidth-slider" min="1" max="5" step="1" value="1"
+            oninput="updateLineWidth(this.value)">
+          <span class="slider-val" id="linewidth-val">1</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Parameters -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        Parameters <span class="arrow">▾</span>
+      </div>
+      <div class="section-body" id="params-body">
+      </div>
+    </div>
+
+    <!-- Initial Conditions -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        Initial Conditions <span class="arrow">▾</span>
+      </div>
+      <div class="section-body">
+        <label>X₀</label>
+        <div class="slider-row">
+          <input type="range" id="ic-x" min="-2" max="2" step="0.01" value="0.1"
+            oninput="updateIC('x', this.value)">
+          <span class="slider-val" id="ic-x-val">0.10</span>
+        </div>
+        <label>Y₀</label>
+        <div class="slider-row">
+          <input type="range" id="ic-y" min="-2" max="2" step="0.01" value="0"
+            oninput="updateIC('y', this.value)">
+          <span class="slider-val" id="ic-y-val">0.00</span>
+        </div>
+        <label>Z₀</label>
+        <div class="slider-row">
+          <input type="range" id="ic-z" min="-2" max="2" step="0.01" value="0"
+            oninput="updateIC('z', this.value)">
+          <span class="slider-val" id="ic-z-val">0.00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tools -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        Tools <span class="arrow">▾</span>
+      </div>
+      <div class="section-body">
+        <div class="btn-row">
+          <button class="btn" id="gallery-btn" onclick="toggleGallery()">⊞ Gallery</button>
+          <button class="btn" id="butterfly-btn" onclick="toggleButterfly()">🦋 Butterfly</button>
+        </div>
+        <button class="btn btn-full" onclick="takeScreenshot()">📷 Screenshot</button>
+      </div>
+    </div>
+
+  </div><!-- /panel-body -->
+</div><!-- /panel -->
+
+<!-- Bottom Info Panel -->
+<div id="info-panel" class="collapsed">
+  <div id="info-toggle" onclick="toggleInfo()">
+    <span class="arrow">▲</span>
+    <span>Info</span>
+    <span id="info-toggle-name">Lorenz Attractor</span>
+  </div>
+  <div id="info-body">
+    <div id="info-description">
+      <h3>About</h3>
+      <p id="info-desc-text"></p>
+    </div>
+    <div id="info-equations">
+      <h3>Equations</h3>
+      <p id="info-eq-text"></p>
+    </div>
+    <div id="info-history">
+      <h3>History &amp; Parameters</h3>
+      <p id="info-hist-text"></p>
+    </div>
+  </div>
+</div>
+
+<button id="reset-camera-btn" class="btn" onclick="resetCamera()">⊙ Reset Camera</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+'use strict';
+
+// ════════════════════════════════════════════════════════
+// 1. ATTRACTOR DEFINITIONS
+// ════════════════════════════════════════════════════════
+const ATTRACTORS = [
+  {
+    id: 'lorenz',
+    name: 'Lorenz',
+    description: 'The iconic butterfly-shaped attractor, the archetype of chaos theory. Discovered while modeling atmospheric convection.',
+    equations: 'dx/dt = σ(y − x)\ndy/dt = x(ρ − z) − y\ndz/dt = xy − βz',
+    history: 'Edward Lorenz, 1963. Parameters: σ (Prandtl number), ρ (Rayleigh number), β (geometric factor). Default: σ=10, ρ=28, β=8/3.',
+    params: [
+      { id: 'sigma', label: 'σ (sigma)', min: 1, max: 30, step: 0.1, value: 10 },
+      { id: 'rho',   label: 'ρ (rho)',   min: 1, max: 60, step: 0.1, value: 28 },
+      { id: 'beta',  label: 'β (beta)',  min: 0.1, max: 8, step: 0.01, value: 2.667 }
+    ],
+    ic: [0.1, 0, 0],
+    dt: 0.005,
+    scale: 40,
+    cameraPos: [60, 40, 60],
+    fn(p, [x, y, z]) {
+      return [
+        p.sigma * (y - x),
+        x * (p.rho - z) - y,
+        x * y - p.beta * z
+      ];
+    }
+  },
+  {
+    id: 'rossler',
+    name: 'Rössler',
+    description: 'A simpler attractor with a single spiral and folding mechanism, often used to study chaos fundamentals.',
+    equations: 'dx/dt = −y − z\ndy/dt = x + ay\ndz/dt = b + z(x − c)',
+    history: 'Otto Rössler, 1976. Created to model chemical reactions. Parameters a, b control the spiral; c controls the chaotic folding.',
+    params: [
+      { id: 'a', label: 'a', min: 0.01, max: 0.5, step: 0.001, value: 0.2 },
+      { id: 'b', label: 'b', min: 0.01, max: 0.5, step: 0.001, value: 0.2 },
+      { id: 'c', label: 'c', min: 1,    max: 10,  step: 0.1,   value: 5.7 }
+    ],
+    ic: [0.1, 0, 0],
+    dt: 0.01,
+    scale: 20,
+    cameraPos: [0, 0, 60],
+    fn(p, [x, y, z]) {
+      return [
+        -y - z,
+        x + p.a * y,
+        p.b + z * (x - p.c)
+      ];
+    }
+  },
+  {
+    id: 'thomas',
+    name: 'Thomas',
+    description: 'A cyclically symmetric attractor with trigonometric coupling, exhibiting rich fractal structure.',
+    equations: 'dx/dt = sin(y) − bx\ndy/dt = sin(z) − by\ndz/dt = sin(x) − bz',
+    history: 'René Thomas, 1999. The parameter b controls dissipation. At b≈0.208, the system is in a critical chaotic regime.',
+    params: [
+      { id: 'b', label: 'b (dissipation)', min: 0.1, max: 0.5, step: 0.001, value: 0.208186 }
+    ],
+    ic: [0.1, 0, 0],
+    dt: 0.05,
+    scale: 5,
+    cameraPos: [15, 10, 15],
+    fn(p, [x, y, z]) {
+      return [
+        Math.sin(y) - p.b * x,
+        Math.sin(z) - p.b * y,
+        Math.sin(x) - p.b * z
+      ];
+    }
+  },
+  {
+    id: 'aizawa',
+    name: 'Aizawa',
+    description: 'A complex toroidal strange attractor with intricate winding structure and rich three-dimensional geometry.',
+    equations: 'dx/dt = (z−b)x − dy\ndy/dt = dx + (z−b)y\ndz/dt = c+az−z³/3\n−(x²+y²)(1+ez)+fzx³',
+    history: 'Yositake Aizawa, 1984. Exhibits a complex toroidal structure. Six parameters control the shape and topology of the attractor.',
+    params: [
+      { id: 'a', label: 'a', min: 0.1, max: 2,   step: 0.01, value: 0.95 },
+      { id: 'b', label: 'b', min: 0.1, max: 2,   step: 0.01, value: 0.7  },
+      { id: 'c', label: 'c', min: 0.1, max: 2,   step: 0.01, value: 0.6  },
+      { id: 'd', label: 'd', min: 1,   max: 6,   step: 0.1,  value: 3.5  },
+      { id: 'e', label: 'e', min: 0,   max: 1,   step: 0.01, value: 0.25 },
+      { id: 'f', label: 'f', min: 0,   max: 0.5, step: 0.01, value: 0.1  }
+    ],
+    ic: [0.1, 1, 0.01],
+    dt: 0.01,
+    scale: 2,
+    cameraPos: [4, 3, 5],
+    fn(p, [x, y, z]) {
+      return [
+        (z - p.b) * x - p.d * y,
+        p.d * x + (z - p.b) * y,
+        p.c + p.a * z - (z * z * z) / 3 - (x * x + y * y) * (1 + p.e * z) + p.f * z * x * x * x
+      ];
+    }
+  },
+  {
+    id: 'chen',
+    name: 'Chen',
+    description: 'A double-scroll attractor similar to Lorenz but with distinct dynamics, discovered in electronic circuit analysis.',
+    equations: 'dx/dt = a(y − x)\ndy/dt = (c−a)x − xz + cy\ndz/dt = xy − bz',
+    history: 'Guanrong Chen & Tetsushi Ueta, 1999. Found while searching for systems with two-scroll chaotic attractors in circuit design.',
+    params: [
+      { id: 'a', label: 'a', min: 10, max: 60, step: 0.5, value: 35 },
+      { id: 'b', label: 'b', min: 1,  max: 10, step: 0.1, value: 3  },
+      { id: 'c', label: 'c', min: 10, max: 50, step: 0.5, value: 28 }
+    ],
+    ic: [0.1, 0, 0],
+    dt: 0.002,
+    scale: 30,
+    cameraPos: [60, 40, 60],
+    fn(p, [x, y, z]) {
+      return [
+        p.a * (y - x),
+        (p.c - p.a) * x - x * z + p.c * y,
+        x * y - p.b * z
+      ];
+    }
+  },
+  {
+    id: 'halvorsen',
+    name: 'Halvorsen',
+    description: 'A cyclically symmetric three-dimensional attractor with quadratic nonlinearities, producing elegant spiral structures.',
+    equations: 'dx/dt = −ax − 4y − 4z − y²\ndy/dt = −ay − 4z − 4x − z²\ndz/dt = −az − 4x − 4y − x²',
+    history: 'Johan Halvorsen, ~2000s. Exhibits rotational symmetry under cyclic permutation of coordinates. Parameter a controls the dissipation rate.',
+    params: [
+      { id: 'a', label: 'a (dissipation)', min: 0.8, max: 2.5, step: 0.01, value: 1.4 }
+    ],
+    ic: [0.1, 0, 0],
+    dt: 0.01,
+    scale: 10,
+    cameraPos: [20, 15, 25],
+    fn(p, [x, y, z]) {
+      return [
+        -p.a * x - 4 * y - 4 * z - y * y,
+        -p.a * y - 4 * z - 4 * x - z * z,
+        -p.a * z - 4 * x - 4 * y - x * x
+      ];
+    }
+  },
+  {
+    id: 'dadras',
+    name: 'Dadras',
+    description: 'A recently discovered multi-wing chaotic attractor with complex topology arising from a simple polynomial system.',
+    equations: 'dx/dt = y − ax + byz\ndy/dt = cy − xz + z\ndz/dt = dxy − ez',
+    history: 'Sara Dadras & Hamid Reza Momeni, 2009. Generates multiple coexisting attractors for different initial conditions and parameters.',
+    params: [
+      { id: 'a', label: 'a', min: 1, max: 6,  step: 0.1, value: 3   },
+      { id: 'b', label: 'b', min: 1, max: 6,  step: 0.1, value: 2.7 },
+      { id: 'c', label: 'c', min: 1, max: 3,  step: 0.1, value: 1.7 },
+      { id: 'd', label: 'd', min: 1, max: 4,  step: 0.1, value: 2   },
+      { id: 'e', label: 'e', min: 1, max: 15, step: 0.1, value: 9   }
+    ],
+    ic: [0.1, 0, 0],
+    dt: 0.005,
+    scale: 20,
+    cameraPos: [30, 20, 35],
+    fn(p, [x, y, z]) {
+      return [
+        y - p.a * x + p.b * y * z,
+        p.c * y - x * z + z,
+        p.d * x * y - p.e * z
+      ];
+    }
+  }
+];
+
+// ════════════════════════════════════════════════════════
+// 2. SIMULATION STATE
+// ════════════════════════════════════════════════════════
+const MAX_POINTS = 50000;
+
+const state = {
+  attractorIndex: 0,
+  params: {},
+  ic: [0.1, 0, 0],
+  pos: [0.1, 0, 0],
+  playing: true,
+  speed: 1.0,
+  colorScheme: 'time',
+  trailLength: 20000,
+  opacity: 0.85,
+  lineWidth: 1,
+  bufferHead: 0,
+  bufferCount: 0,
+  galleryMode: false,
+  galleryTimer: null,
+  butterflyMode: false,
+  fadeOut: false,
+  fadeOpacity: 1.0
+};
+
+// ════════════════════════════════════════════════════════
+// 3. THREE.JS SETUP
+// ════════════════════════════════════════════════════════
+const container = document.getElementById('canvas-container');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x0a0a0f, 1);
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 10000);
+camera.position.set(60, 40, 60);
+camera.lookAt(0, 0, 0);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.screenSpacePanning = false;
+controls.minDistance = 0.5;
+controls.maxDistance = 500;
+
+// Ambient subtle grid (optional stars)
+(function addStars() {
+  const geo = new THREE.BufferGeometry();
+  const verts = new Float32Array(300);
+  for (let i = 0; i < 300; i++) verts[i] = (Math.random() - 0.5) * 600;
+  geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+  const mat = new THREE.PointsMaterial({ color: 0x333366, size: 0.5 });
+  scene.add(new THREE.Points(geo, mat));
+})();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ════════════════════════════════════════════════════════
+// 4. TRAJECTORY MANAGEMENT
+// ════════════════════════════════════════════════════════
+// Main trajectory
+const positions = new Float32Array(MAX_POINTS * 3);
+const colors    = new Float32Array(MAX_POINTS * 3);
+const velocities = new Float32Array(MAX_POINTS); // magnitude for velocity coloring
+
+const lineGeo = new THREE.BufferGeometry();
+lineGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+lineGeo.setAttribute('color',    new THREE.BufferAttribute(colors,    3));
+lineGeo.setDrawRange(0, 0);
+
+const lineMat = new THREE.LineBasicMaterial({
+  vertexColors: true,
+  blending: THREE.AdditiveBlending,
+  transparent: true,
+  opacity: state.opacity,
+  depthWrite: false,
+  linewidth: 1
+});
+
+const line = new THREE.Line(lineGeo, lineMat);
+scene.add(line);
+
+// Butterfly trajectories
+const BUTTERFLY_COUNT = 5;
+// Small perturbation to demonstrate sensitive dependence on initial conditions
+const BUTTERFLY_DELTA = 1e-7;
+const butterflyLines = [];
+const butterflyPos = [];
+const butterflyBufHead = new Int32Array(BUTTERFLY_COUNT);
+const butterflyBufCount = new Int32Array(BUTTERFLY_COUNT);
+
+const BFY_HUES = [0, 60, 120, 200, 280]; // degrees
+
+for (let i = 0; i < BUTTERFLY_COUNT; i++) {
+  const bPos = new Float32Array(MAX_POINTS * 3);
+  const bCol = new Float32Array(MAX_POINTS * 3);
+  const bGeo = new THREE.BufferGeometry();
+  bGeo.setAttribute('position', new THREE.BufferAttribute(bPos, 3));
+  bGeo.setAttribute('color',    new THREE.BufferAttribute(bCol, 3));
+  bGeo.setDrawRange(0, 0);
+  const bMat = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    opacity: 0.6,
+    depthWrite: false
+  });
+  const bLine = new THREE.Line(bGeo, bMat);
+  bLine.visible = false;
+  scene.add(bLine);
+  butterflyLines.push(bLine);
+  butterflyPos.push([0.1 + i * BUTTERFLY_DELTA, 0, 0]);
+}
+
+// ════════════════════════════════════════════════════════
+// 5. RK4 INTEGRATOR
+// ════════════════════════════════════════════════════════
+function rk4Step(fn, params, pos, dt) {
+  const k1 = fn(params, pos);
+  const p2 = [pos[0] + k1[0]*dt*0.5, pos[1] + k1[1]*dt*0.5, pos[2] + k1[2]*dt*0.5];
+  const k2 = fn(params, p2);
+  const p3 = [pos[0] + k2[0]*dt*0.5, pos[1] + k2[1]*dt*0.5, pos[2] + k2[2]*dt*0.5];
+  const k3 = fn(params, p3);
+  const p4 = [pos[0] + k3[0]*dt, pos[1] + k3[1]*dt, pos[2] + k3[2]*dt];
+  const k4 = fn(params, p4);
+  return [
+    pos[0] + (k1[0] + 2*k2[0] + 2*k3[0] + k4[0]) * dt / 6,
+    pos[1] + (k1[1] + 2*k2[1] + 2*k3[1] + k4[1]) * dt / 6,
+    pos[2] + (k1[2] + 2*k2[2] + 2*k3[2] + k4[2]) * dt / 6
+  ];
+}
+
+function velocityMagnitude(fn, params, pos, dt) {
+  const d = fn(params, pos);
+  return Math.sqrt(d[0]*d[0] + d[1]*d[1] + d[2]*d[2]) * dt;
+}
+
+// ════════════════════════════════════════════════════════
+// 6. COLOR SCHEME FUNCTIONS
+// ════════════════════════════════════════════════════════
+function hslToRgb(h, s, l) {
+  h /= 360; s /= 100; l /= 100;
+  let r, g, b;
+  if (s === 0) { r = g = b = l; }
+  else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q-p)*6*t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q-p)*(2/3-t)*6;
+      return p;
+    };
+    const q = l < 0.5 ? l*(1+s) : l+s-l*s;
+    const p = 2*l-q;
+    r = hue2rgb(p,q,h+1/3);
+    g = hue2rgb(p,q,h);
+    b = hue2rgb(p,q,h-1/3);
+  }
+  return [r, g, b];
+}
+
+let velMin = 0, velMax = 1;
+let zMin = -30, zMax = 30;
+
+function computeColor(idx, scheme, bufferCount, z) {
+  const t = bufferCount > 1 ? idx / (bufferCount - 1) : 0;
+  switch (scheme) {
+    case 'time': {
+      const hue = (t * 300 + 240) % 360;
+      return hslToRgb(hue, 100, 60);
+    }
+    case 'velocity': {
+      const v = velocities[idx] || 0;
+      const tn = velMax > velMin ? (v - velMin) / (velMax - velMin + 1e-10) : 0;
+      const hue = (1 - tn) * 240;
+      return hslToRgb(hue, 100, 55);
+    }
+    case 'depth': {
+      const tn = zMax > zMin ? (z - zMin) / (zMax - zMin + 1e-10) : 0.5;
+      const hue = tn * 280;
+      return hslToRgb(hue, 100, 58);
+    }
+    case 'solid':
+    default:
+      return [0.91, 0.27, 0.376]; // #e94560
+  }
+}
+
+function refreshColors() {
+  const attr = lineGeo.getAttribute('color');
+  const posAttr = lineGeo.getAttribute('position');
+  const n = state.bufferCount;
+  if (n === 0) return;
+
+  // Recompute vel/z range
+  if (state.colorScheme === 'velocity') {
+    velMin = Infinity; velMax = -Infinity;
+    for (let i = 0; i < n; i++) { const v = velocities[i]; if (v < velMin) velMin = v; if (v > velMax) velMax = v; }
+  }
+  if (state.colorScheme === 'depth') {
+    zMin = Infinity; zMax = -Infinity;
+    for (let i = 0; i < n; i++) { const z = posAttr.array[i*3+2]; if (z < zMin) zMin = z; if (z > zMax) zMax = z; }
+  }
+
+  for (let i = 0; i < n; i++) {
+    const z = posAttr.array[i*3+2];
+    const [r,g,b] = computeColor(i, state.colorScheme, n, z);
+    attr.array[i*3]   = r;
+    attr.array[i*3+1] = g;
+    attr.array[i*3+2] = b;
+  }
+  attr.needsUpdate = true;
+}
+
+function pushPoint(x, y, z, vel) {
+  const idx = state.bufferHead;
+  const pa = lineGeo.getAttribute('position').array;
+  pa[idx*3]   = x;
+  pa[idx*3+1] = y;
+  pa[idx*3+2] = z;
+  velocities[idx] = vel;
+
+  const [r,g,b] = computeColor(idx, state.colorScheme, Math.max(state.bufferCount, 1), z);
+  const ca = lineGeo.getAttribute('color').array;
+  ca[idx*3]   = r;
+  ca[idx*3+1] = g;
+  ca[idx*3+2] = b;
+
+  state.bufferHead = (idx + 1) % MAX_POINTS;
+  if (state.bufferCount < MAX_POINTS) state.bufferCount++;
+}
+
+function pushButterflyPoint(bi, x, y, z) {
+  const idx = butterflyBufHead[bi];
+  const geo = butterflyLines[bi].geometry;
+  const pa = geo.getAttribute('position').array;
+  pa[idx*3]   = x;
+  pa[idx*3+1] = y;
+  pa[idx*3+2] = z;
+
+  // Color by hue of this butterfly + depth blend
+  const hue = BFY_HUES[bi];
+  const [r,g,b] = hslToRgb(hue, 100, 60);
+  const ca = geo.getAttribute('color').array;
+  ca[idx*3]   = r;
+  ca[idx*3+1] = g;
+  ca[idx*3+2] = b;
+
+  butterflyBufHead[bi] = (idx + 1) % MAX_POINTS;
+  if (butterflyBufCount[bi] < MAX_POINTS) butterflyBufCount[bi]++;
+
+  const n = Math.min(butterflyBufCount[bi], state.trailLength);
+  geo.setDrawRange(0, n);
+  geo.getAttribute('position').needsUpdate = true;
+  geo.getAttribute('color').needsUpdate = true;
+}
+
+function updateDrawRange() {
+  const n = Math.min(state.bufferCount, state.trailLength);
+  lineGeo.setDrawRange(0, n);
+  lineGeo.getAttribute('position').needsUpdate = true;
+  lineGeo.getAttribute('color').needsUpdate = true;
+}
+
+// ════════════════════════════════════════════════════════
+// 7. UI INITIALIZATION AND EVENT HANDLERS
+// ════════════════════════════════════════════════════════
+
+function getAttractor() { return ATTRACTORS[state.attractorIndex]; }
+
+function buildParamSliders() {
+  const body = document.getElementById('params-body');
+  body.innerHTML = '';
+  const att = getAttractor();
+  att.params.forEach(p => {
+    const label = document.createElement('label');
+    label.textContent = p.label;
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.id = 'param-' + p.id;
+    slider.min = p.min; slider.max = p.max; slider.step = p.step;
+    slider.value = state.params[p.id] !== undefined ? state.params[p.id] : p.value;
+    const valSpan = document.createElement('span');
+    valSpan.className = 'slider-val';
+    valSpan.id = 'param-val-' + p.id;
+    valSpan.textContent = parseFloat(slider.value).toFixed(3);
+    slider.oninput = function() {
+      state.params[p.id] = parseFloat(this.value);
+      valSpan.textContent = parseFloat(this.value).toFixed(3);
+      resetSimulation();
+    };
+    row.appendChild(slider); row.appendChild(valSpan);
+    body.appendChild(label); body.appendChild(row);
+  });
+}
+
+function populateAttractorDefaults() {
+  const att = getAttractor();
+  state.params = {};
+  att.params.forEach(p => { state.params[p.id] = p.value; });
+  state.ic = [...att.ic];
+  state.pos = [...att.ic];
+}
+
+function initAttractor(index) {
+  state.attractorIndex = index;
+  populateAttractorDefaults();
+  buildParamSliders();
+  updateICSliders();
+  updateInfoPanel();
+  updateHUD();
+  resetSimulation(false);
+  resetCamera();
+}
+
+function selectAttractor(id) {
+  const idx = ATTRACTORS.findIndex(a => a.id === id);
+  if (idx < 0) return;
+  initAttractor(idx);
+}
+
+function updateICSliders() {
+  const att = getAttractor();
+  const ic = att.ic;
+  const names = ['x','y','z'];
+  names.forEach((n, i) => {
+    const el = document.getElementById('ic-' + n);
+    const val = document.getElementById('ic-' + n + '-val');
+    if (el) { el.value = ic[i]; val.textContent = parseFloat(ic[i]).toFixed(2); }
+  });
+}
+
+function resetSimulation(keepFade) {
+  if (!keepFade) {
+    state.fadeOut = false;
+    state.fadeOpacity = state.opacity;
+  }
+  state.pos = [...state.ic];
+  state.bufferHead = 0;
+  state.bufferCount = 0;
+  // Clear line data
+  positions.fill(0);
+  colors.fill(0);
+  lineGeo.setDrawRange(0, 0);
+  // Clear butterfly data
+  for (let i = 0; i < BUTTERFLY_COUNT; i++) {
+    butterflyBufHead[i] = 0;
+    butterflyBufCount[i] = 0;
+    const att = getAttractor();
+    butterflyPos[i] = [
+      att.ic[0] + i * BUTTERFLY_DELTA,
+      att.ic[1],
+      att.ic[2]
+    ];
+    butterflyLines[i].geometry.setDrawRange(0, 0);
+  }
+}
+
+function togglePlay() {
+  state.playing = !state.playing;
+  document.getElementById('play-btn').textContent = state.playing ? '⏸ Pause' : '▶ Play';
+}
+
+function updateSpeed(v) {
+  state.speed = parseFloat(v);
+  document.getElementById('speed-val').textContent = state.speed.toFixed(1) + '×';
+}
+
+function updateColorScheme(v) {
+  state.colorScheme = v;
+  refreshColors();
+}
+
+function updateTrailLength(v) {
+  state.trailLength = parseInt(v);
+  document.getElementById('trail-val').textContent = v;
+  updateDrawRange();
+}
+
+function updateOpacity(v) {
+  state.opacity = parseFloat(v);
+  document.getElementById('opacity-val').textContent = parseFloat(v).toFixed(2);
+  lineMat.opacity = state.opacity;
+}
+
+function updateLineWidth(v) {
+  state.lineWidth = parseInt(v);
+  document.getElementById('linewidth-val').textContent = v;
+  lineMat.linewidth = state.lineWidth;
+}
+
+function updateIC(axis, v) {
+  const i = ['x','y','z'].indexOf(axis);
+  state.ic[i] = parseFloat(v);
+  document.getElementById('ic-' + axis + '-val').textContent = parseFloat(v).toFixed(2);
+  resetSimulation();
+}
+
+function resetCamera() {
+  const att = getAttractor();
+  const [cx, cy, cz] = att.cameraPos;
+  camera.position.set(cx, cy, cz);
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+
+function updateHUD() {
+  const att = getAttractor();
+  document.getElementById('hud-title').textContent = att.name.toUpperCase();
+  document.title = `${att.name} Attractor | Strange Attractors`;
+}
+
+function updateInfoPanel() {
+  const att = getAttractor();
+  document.getElementById('info-toggle-name').textContent = att.name + ' Attractor';
+  document.getElementById('info-desc-text').textContent = att.description;
+  document.getElementById('info-eq-text').textContent = att.equations;
+  document.getElementById('info-hist-text').textContent = att.history;
+}
+
+// ════════════════════════════════════════════════════════
+// 8. GALLERY MODE
+// ════════════════════════════════════════════════════════
+function toggleGallery() {
+  state.galleryMode = !state.galleryMode;
+  const btn = document.getElementById('gallery-btn');
+  const ind = document.getElementById('gallery-indicator');
+  if (state.galleryMode) {
+    btn.classList.add('active');
+    ind.style.display = 'block';
+    startGalleryTimer();
+  } else {
+    btn.classList.remove('active');
+    ind.style.display = 'none';
+    clearTimeout(state.galleryTimer);
+  }
+}
+
+const GALLERY_INTERVAL_MS = 10000; // 10 seconds per attractor
+
+function startGalleryTimer() {
+  clearTimeout(state.galleryTimer);
+  if (!state.galleryMode) return;
+  state.galleryTimer = setTimeout(() => {
+    const next = (state.attractorIndex + 1) % ATTRACTORS.length;
+    document.getElementById('attractor-select').value = ATTRACTORS[next].id;
+    initAttractor(next);
+    startGalleryTimer();
+  }, GALLERY_INTERVAL_MS);
+}
+
+// ════════════════════════════════════════════════════════
+// BUTTERFLY EFFECT
+// ════════════════════════════════════════════════════════
+function toggleButterfly() {
+  state.butterflyMode = !state.butterflyMode;
+  const btn = document.getElementById('butterfly-btn');
+  if (state.butterflyMode) {
+    btn.classList.add('active');
+    line.visible = false;
+    butterflyLines.forEach(l => { l.visible = true; });
+    resetSimulation();
+  } else {
+    btn.classList.remove('active');
+    line.visible = true;
+    butterflyLines.forEach(l => { l.visible = false; });
+    resetSimulation();
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// SCREENSHOT
+// ════════════════════════════════════════════════════════
+function takeScreenshot() {
+  renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `attractor-${getAttractor().id}-${Date.now()}.png`;
+  a.click();
+}
+
+// ════════════════════════════════════════════════════════
+// PANEL / SECTION TOGGLES
+// ════════════════════════════════════════════════════════
+function togglePanel() {
+  const panel = document.getElementById('panel');
+  const tog = document.getElementById('panel-toggle');
+  panel.classList.toggle('collapsed');
+  tog.textContent = panel.classList.contains('collapsed') ? '⟨' : '⟩';
+}
+
+function toggleSection(header) {
+  header.parentElement.classList.toggle('closed');
+}
+
+function toggleInfo() {
+  document.getElementById('info-panel').classList.toggle('collapsed');
+}
+
+// ════════════════════════════════════════════════════════
+// POPULATE ATTRACTOR SELECT
+// ════════════════════════════════════════════════════════
+(function populateSelect() {
+  const sel = document.getElementById('attractor-select');
+  ATTRACTORS.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = a.name;
+    sel.appendChild(opt);
+  });
+})();
+
+// ════════════════════════════════════════════════════════
+// 9. ANIMATION LOOP
+// ════════════════════════════════════════════════════════
+// 10 integration steps per animation frame balances accuracy and performance
+const STEPS_PER_FRAME = 10;
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+
+  if (state.playing) {
+    const att = getAttractor();
+    const stepsRaw = STEPS_PER_FRAME * state.speed;
+    const steps = Math.max(1, Math.round(stepsRaw));
+    const dtScale = stepsRaw / steps;
+
+    if (!state.butterflyMode) {
+      for (let s = 0; s < steps; s++) {
+        const newPos = rk4Step(att.fn, state.params, state.pos, att.dt * dtScale);
+        const vel = velocityMagnitude(att.fn, state.params, state.pos, att.dt);
+        if (!isFinite(newPos[0]) || !isFinite(newPos[1]) || !isFinite(newPos[2])) break;
+        pushPoint(newPos[0], newPos[1], newPos[2], vel);
+        state.pos = newPos;
+      }
+      updateDrawRange();
+    } else {
+      for (let bi = 0; bi < BUTTERFLY_COUNT; bi++) {
+        for (let s = 0; s < steps; s++) {
+          const newPos = rk4Step(att.fn, state.params, butterflyPos[bi], att.dt * dtScale);
+          if (!isFinite(newPos[0]) || !isFinite(newPos[1]) || !isFinite(newPos[2])) break;
+          pushButterflyPoint(bi, newPos[0], newPos[1], newPos[2]);
+          butterflyPos[bi] = newPos;
+        }
+      }
+    }
+
+    document.getElementById('hud-points').textContent =
+      'Points: ' + (state.butterflyMode
+        ? (Math.min(butterflyBufCount[0], state.trailLength) * BUTTERFLY_COUNT).toLocaleString()
+        : Math.min(state.bufferCount, state.trailLength).toLocaleString());
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ════════════════════════════════════════════════════════
+// STARTUP
+// ════════════════════════════════════════════════════════
+initAttractor(0);
+animate();
+</script>
+</body>
+</html>
