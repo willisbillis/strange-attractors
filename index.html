@@ -730,7 +730,9 @@ scene.add(line);
 
 // Butterfly trajectories
 const BUTTERFLY_COUNT = 5;
-// Small perturbation to demonstrate sensitive dependence on initial conditions
+// 1e-7 perturbation: small enough to be indistinguishable at start, large enough
+// that trajectories visibly diverge within ~50-100 Lyapunov times — ideal for
+// demonstrating sensitive dependence on initial conditions (the butterfly effect).
 const BUTTERFLY_DELTA = 1e-7;
 const butterflyLines = [];
 const butterflyPos = [];
